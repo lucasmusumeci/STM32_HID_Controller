@@ -1,0 +1,48 @@
+# ===== Build directories =====
+Debug/
+Release/
+build/
+out/
+
+# ===== STM32CubeIDE generated files =====
+*.launch
+*.ioc.log
+*.log
+
+# ===== Object / binary artifacts =====
+*.o
+*.d
+*.a
+*.so
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.su
+
+# ===== Dependency / intermediate files =====
+*.dep
+*.dmp
+
+# ===== Editor temporary files =====
+*~
+*.swp
+*.swo
+*.tmp
+
+# ===== OS files =====
+.DS_Store
+Thumbs.db
+
+# ===== Eclipse / CubeIDE metadata =====
+.metadata/
+.settings/
+
+# ===== CMake (if ever used later) =====
+CMakeFiles/
+CMakeCache.txt
+cmake-build-*/
+
+# ===== VSCode (optional – remove if you want to share workspace config) =====
+.vscode/
