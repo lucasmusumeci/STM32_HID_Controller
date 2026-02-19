@@ -52,6 +52,9 @@ usb_keyb_t 			g_usb;					// USB CDC data structure
 #define EP0_MAX_PACKET_SIZE				0x40			// 64 bytes
 #define EP0_MAX_PACKET_SIZE_UNSIGNED    0x40U
 
+#define EP1_MAX_PACKET_SIZE				0x40			// 64 bytes
+#define EP1_MAX_PACKET_SIZE_UNSIGNED    0x40U
+
 #define USB_DESCTYPE_DEVICE				0x01
 #define	USB_DESCTYPE_CONFIGURATION		0x02
 #define USB_DESCTYPE_INTERFACE			0x04
@@ -155,7 +158,7 @@ uint8_t cfgDesc[] =
 		0x01,                       		/* 4  bNumInterfaces */
 		0x01,                       		/* 5  bConfigurationValue */
 		0x00,                       		/* 6  iConfiguration - index of string */
-		0x80,                       		/* 7  bmAttributes - Bus powered */
+		0xC0,                       		/* 7  bmAttributes - 0x80 Bus powered ; 0xC0 Self powered ; +0x20 to add remote wkup*/
 		0x32,                       		/* 8  bMaxPower in 2mA units = 100mA */
 
 		/* Interface Descriptor */
@@ -183,7 +186,7 @@ uint8_t cfgDesc[] =
 		USB_DESCTYPE_ENDPOINT,    			/* 1    bDescriptorType = Endpoint */
 		0x81,								/* 2    bEndpointAddress = IN endpoint 1 */
 		0x03,                     			/* 3    bmAttributes = Interrupt */
-		0x08, 0x00,                    	    /* 4-5  wMaxPacketSize (in LE) */
+		EP1_MAX_PACKET_SIZE, 0x00,          /* 4-5  wMaxPacketSize (in LE) */
 		0x0A                      			/* 6    bInterval = 10 ms */
 };
 
@@ -685,19 +688,7 @@ void OTG_FS_IRQHandler(void)
 			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_EPDISD_Msk) == USB_OTG_DIEPINT_EPDISD) my_printf("[EPDISD]"); // Endpoint disbaled interrupt
 			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_TOC_Msk)    == USB_OTG_DIEPINT_TOC)    my_printf("[TOC]");	  // Timeout condition
 			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_INEPNE_Msk) == USB_OTG_DIEPINT_INEPNE) my_printf("[INEPNE]"); // IN endpoint NAK effective
-/*
-			// Added this (do some sniffing to see what it changes)
-			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_TXFE_Msk) == USB_OTG_DIEPINT_TXFE)
-			{
-				my_printf("[TXFE]");
-			    // Write only the first packet (one time)
-				p_fifo = (uint32_t*)0x50001000;
-				USB_FIFO_Write(p_fifo, g_usb.tx_buffer, g_usb.tx_nbytes);
 
-			    // Disable TXFE for EP0 (avoid interrupt storm)
-			    USB_OTG_FS_DEVICE->DIEPEMPMSK &= ~(1U << 0);
-			}
-*/
 			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_ITTXFE_Msk) == USB_OTG_DIEPINT_ITTXFE ) // IN token received when Tx FIFO empty
 			{
 				my_printf("[ITTXFE]");
@@ -772,17 +763,20 @@ void OTG_FS_IRQHandler(void)
 		// If this is for EP1
 		if ( (USB_OTG_FS_DEVICE->DAINT & 0x00000002) == 0x00000002)
 		{
-			// my_printf("[IEP1]");
-			// my_printf("[%08x]", USB_OTG_FS->GINTSTS);
+			my_printf("[IEP1]");
+			my_printf("[%08x]", USB_OTG_FS->GINTSTS);
 
 	    	while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
 	    	USART3->TDR = '1';
 
+
+	    	// Transfer completed interrupt
 			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_XFRC_Msk) == USB_OTG_DIEPINT_XFRC)
 			{
 				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
 		    	USART3->TDR = 'X';
 
+		    	// Reset transfer completed interrupt mask
 				USB_OTG_FS_DEVICE->DIEPMSK &= ~USB_OTG_DIEPMSK_XFRCM;
 
 				// Transmission is done
@@ -807,6 +801,7 @@ void OTG_FS_IRQHandler(void)
 		    	USART3->TDR = 'N';
 			}
 
+			// IN token received when Tx FIFO is empty
 			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_ITTXFE_Msk) == USB_OTG_DIEPINT_ITTXFE)
 			{
 				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
@@ -818,18 +813,31 @@ void OTG_FS_IRQHandler(void)
 				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
 		    	USART3->TDR = 'E';
 
-				// Writing to the FIFO triggers the data transmission upon next IN token
-				if (g_usb.tx_nbytes > 0)
-				{
-					// Copy data to send into EP1 TX FIFO
-					p_fifo = (uint32_t*)0x50002000;
-					USB_FIFO_Write(p_fifo, g_usb.tx_buffer, g_usb.tx_nbytes);
+		    	// Writing to the FIFO triggers the data transmission upon next IN token
+		    	if (g_usb.tx_nbytes > 0)
+		    	{
+		    		// Calculate number of packets needed (ceiling division)
+		    		uint16_t pcnt = (g_usb.tx_nbytes + EP1_MAX_PACKET_SIZE - 1) / EP1_MAX_PACKET_SIZE;
 
-					// No more data to send
-					g_usb.tx_nbytes = 0;
+		    		// Set transfer size: packet count + byte count
+		    		USB_OTG_FS_INEP(1)->DIEPTSIZ  = 0;
+		    		USB_OTG_FS_INEP(1)->DIEPTSIZ |= (pcnt << 19U);         // packet count
+		    		USB_OTG_FS_INEP(1)->DIEPTSIZ |= g_usb.tx_nbytes;       // byte count
 
-					USB_OTG_FS_DEVICE->DIEPMSK |= USB_OTG_DIEPMSK_XFRCM;
-				}
+		    		// Re-arm EP1 (clear NAK, enable)
+		    		USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA;
+
+
+		    		// Copy data to send into EP1 TX FIFO
+		    		p_fifo = (uint32_t*)0x50002000;
+		    		USB_FIFO_Write(p_fifo, g_usb.tx_buffer, g_usb.tx_nbytes);
+
+		    		// No more data to send
+		    		g_usb.tx_nbytes = 0;
+
+		    		// Set Transfer completed interrupt mask
+		    		USB_OTG_FS_DEVICE->DIEPMSK |= USB_OTG_DIEPMSK_XFRCM;
+		    	}
 
 				// Disable IN EP1 FIFO empty (TXFE) interrupt
 				USB_OTG_FS_DEVICE->DIEPEMPMSK &= ~(1U <<1U);
@@ -837,6 +845,8 @@ void OTG_FS_IRQHandler(void)
 
 			// Clear all EP1 IN interrupt flags
 			USB_OTG_FS_INEP(1)->DIEPINT |= 0x0000287B;
+
+			my_printf("\r\n");
 		}
 	}
 }
@@ -1139,7 +1149,7 @@ static void USB_Setup_Packet_Handler(void)
 				USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_USBAEP;					// USB Active
 				USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_SD0PID_SEVNFRM;			// Set DATA0 PID
 				USB_OTG_FS_INEP(1)->DIEPCTL |= 1U  << USB_OTG_DIEPCTL_TXFNUM_Pos;		// FIFO Number
-				USB_OTG_FS_INEP(1)->DIEPCTL |= EP0_MAX_PACKET_SIZE_UNSIGNED << USB_OTG_DIEPCTL_MPSIZ_Pos;		// Max packet size = 64B
+				USB_OTG_FS_INEP(1)->DIEPCTL |= EP1_MAX_PACKET_SIZE_UNSIGNED << USB_OTG_DIEPCTL_MPSIZ_Pos;		// Max packet size = 64B
 				USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_CNAK;					// Clear NAK
 
 				/*
@@ -1270,6 +1280,31 @@ static void USB_Setup_Packet_Handler(void)
 
 		// Enable IN EP0
 		USB_OTG_FS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
+	}
+
+	// SET_PROTOCOL (bmRequestType=0x21, bRequest=0x0B)
+	if ((g_usb_setup_packet.bmRequestType == 0x21) && (g_usb_setup_packet.bRequest == 0x0B))
+	{
+	    my_printf("[SET PROTOCOL %d]", (uint8_t)(g_usb_setup_packet.wValue & 0xFF));
+	    // wValue: 0 = Boot Protocol, 1 = Report Protocol
+	    // Just ACK it — we only support Report Protocol anyway
+
+	    g_usb_in_ctrl.epnum  = 0;
+	    g_usb_in_ctrl.pcnt   = 1;
+	    g_usb_in_ctrl.bcnt   = 0;
+	    g_usb_in_ctrl.pindex = 0;
+
+	    // Prepare IN EP0 for zero-length status
+	    USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);
+	    USB_OTG_FS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.pcnt << 19U;
+	    USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);
+	    USB_OTG_FS_INEP(0)->DIEPTSIZ |= 0;
+
+	    // Disable FIFO empty interrupt (no data to send)
+	    USB_OTG_FS_DEVICE->DIEPEMPMSK &= ~(1U << 0U);
+
+	    // ACK with zero-length IN packet
+	    USB_OTG_FS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
 	}
 
 }

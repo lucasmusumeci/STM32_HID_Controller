@@ -23,6 +23,9 @@
 // Local functions
 static uint8_t SystemClock_Config(void);
 
+uint8_t	adc_dma_buffer[2];
+
+
 uint8_t		g_controler_event[SIZE_MSG] = { 		0x80,			// X axis (0x80 = 128 = default pos)
 									 	 			0x80,			// Y axis
 													0x80,			// Rx axis
@@ -42,7 +45,6 @@ int main(void)
 {
 	uint8_t		status;
 	uint8_t		n;
-	uint8_t 	pressed;
 
 	// Switch to HSE, 216MHz
 	while(SystemCoreClock != 216000000)
@@ -86,28 +88,16 @@ int main(void)
 	// Initialize and start USB Core
 	BSP_USB_Core_Init();
 
+	// Give it some time to start
 	delay_ms(5000);
-	pressed = 0;
 
 	// Send the message "as keyboard strokes" when the user button is depressed
 	while(1)
 	{
-		/* Read results in sequence order */
+		//my_printf("Pos_X=%d, Pos_Y=%d\n\r", adc_dma_buffer[JOYSTICK1_X], adc_dma_buffer[JOYSTICK1_Y]);
 
-		// Start conversion
-		ADC1->CR2 |= ADC_CR2_SWSTART;
-
-		while (!(ADC1->SR & ADC_SR_EOC));
-		uint8_t joy_x = ADC1->DR;
-
-		while (!(ADC1->SR & ADC_SR_EOC));
-		uint8_t joy_y = ADC1->DR;
-
-		//my_printf("Pox_X=%d\n\r",joy_x);
-		my_printf("Pos_X=%d, Pos_Y=%d\n\r", joy_x, joy_y);
-
-		g_controler_event[2] = joy_x;
-		g_controler_event[3] = 4095-joy_y;
+		g_controler_event[2] = adc_dma_buffer[JOYSTICK1_X];
+		g_controler_event[3] = 4095-adc_dma_buffer[JOYSTICK1_Y];
 
 		if (BSP_PB_GetState() == 1)
 		{
@@ -119,6 +109,7 @@ int main(void)
 		}
 
 		BSP_USB_Send(g_controler_event, SIZE_MSG);
+
 		delay_ms(100);
 	}
 }

@@ -220,6 +220,8 @@ void BSP_Console_Init()
  * on channel 14 and 15 -> pin PC4 and PC5
  */
 
+extern uint8_t	adc_dma_buffer[2];
+
 void BSP_ADC_Init()
 {
 	// Enable GPIOC clock
@@ -236,49 +238,85 @@ void BSP_ADC_Init()
     GPIOC->PUPDR &= ~GPIO_PUPDR_PUPDR3_Msk;
 
 	// Enable ADC clock
-	RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
+    RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
 
-	// Reset ADC configuration
-	ADC ->CCR   = 0x00000000;
-	ADC1->CR1 	= 0x00000000;
-	ADC1->CR2 	= 0x00000000;
-	ADC1->SQR3  = 0x00000000;
-	ADC1->SQR3  = 0x00000000;
-	ADC1->SQR3  = 0x00000000;
+    // Reset ADC configuration
+    ADC ->CCR   = 0x00000000;
+    ADC1->CR1 	= 0x00000000;
+    ADC1->CR2 	= 0x00000000;
+    ADC1->SQR3  = 0x00000000;
+    ADC1->SQR3  = 0x00000000;
+    ADC1->SQR3  = 0x00000000;
     ADC1->SMPR1 = 0x00000000;
     ADC1->SMPR2 = 0x00000000;
 
-	// Enable scan mode (mandatory for multiple channels)
-	ADC1->CR1 |= ADC_CR1_SCAN;
+    // Enable scan mode (mandatory for multiple channels)
+    ADC1->CR1 |= ADC_CR1_SCAN;
 
-	// Enable continuous conversion mode
-	ADC1->CR2 &= ~ADC_CR2_CONT;
+    // Enable continuous conversion mode
+    ADC1->CR2 |= ADC_CR2_CONT;
 
-	// Enable EOC
-	ADC1->CR2 |= ADC_CR2_EOCS;
+    // Enable EOC
+    ADC1->CR2 |= ADC_CR2_EOCS;
 
-	// 8-bit resolution
-	ADC1->CR1 |= (0x02 <<ADC_CR1_RES_Pos);
+    // 8-bit resolution
+    ADC1->CR1 |= (0x02 <<ADC_CR1_RES_Pos);
 
-	// Select PCLK/2 as ADC clock
-	ADC->CCR |= (0x00 << ADC_CCR_ADCPRE_Pos);
+    // Select PCLK/2 as ADC clock
+    ADC->CCR |= (0x00 << ADC_CCR_ADCPRE_Pos);
 
-	// Set sampling time to ADC clock cycles
-	ADC1->SMPR1 |= (0x02 << ADC_SMPR1_SMP10_Pos);
-	ADC1->SMPR1 |= (0x02 << ADC_SMPR1_SMP13_Pos);
+    // Set sampling time to ADC clock cycles
+    ADC1->SMPR1 |= (0x02 << ADC_SMPR1_SMP10_Pos);
+    ADC1->SMPR1 |= (0x02 << ADC_SMPR1_SMP13_Pos);
 
-	// Sequence length = 2 conversions (L = 1 means 2 ranks)
-	ADC1->SQR1 = (0x01 << ADC_SQR1_L_Pos);
+    // Sequence length = 2 conversions (L = 1 means 2 ranks)
+    ADC1->SQR1 = (0x01 << ADC_SQR1_L_Pos);
 
-	/* Rank 1 = channel 10
+    /* Rank 1 = channel 10
 	   Rank 2 = channel 13 */
-	ADC1->SQR3 = (10 << ADC_SQR3_SQ1_Pos) | (13 << ADC_SQR3_SQ2_Pos);
+    ADC1->SQR3 = (10 << ADC_SQR3_SQ1_Pos) | (13 << ADC_SQR3_SQ2_Pos);
 
-	// Enable ADC1
-	ADC1->CR2 |= ADC_CR2_ADON;
+    // Start DMA clock
+    RCC->AHB1ENR |= RCC_AHB1ENR_DMA2EN;
 
-	// Start conversion on ADC1
-	//ADC1->CR2 |= ADC_CR2_SWSTART;
+    // Reset DMA1 Channel 2 configuration
+    DMA2_Stream0->CR = 0x00000000;
+
+    // Configure DMA2 ; Stream 0 ; Channel 0
+    // Peripheral -> Memory
+    // Peripheral is 8-bit, no increment
+    // Memory is 8-bit, increment
+    // Circular mode
+
+    // Select Channel 0
+    DMA2_Stream0->CR |= (0x00 << DMA_SxCR_CHSEL_Pos);
+
+    // Enable circular mode and memory increment
+    DMA2_Stream0->CR |= (DMA_SxCR_CIRC | DMA_SxCR_MINC);
+
+    // Configure sizes and increments
+    DMA2_Stream0->CR |= ((0x00 << DMA_SxCR_PSIZE_Pos) | (0x00 << DMA_SxCR_MSIZE_Pos));
+
+    // Peripheral is ADC1 DR
+    DMA2_Stream0->PAR = (uint32_t)&ADC1->DR;
+
+    // Memory is adc_dma_buffer
+    DMA2_Stream0->M0AR = (uint32_t)adc_dma_buffer;
+
+    // Set Memory Buffer size
+    DMA2_Stream0->NDTR = 2;
+
+    // Set data transfer direction
+    DMA2_Stream0->CR |= (0x00 << DMA_SxCR_DIR_Pos);
+
+    // Enable DMA2 Channel 0
+    DMA2_Stream0->CR |= DMA_SxCR_EN;
+
+    // Enable ADC1 ; DMA and DMA request
+    ADC1->CR2 |= (ADC_CR2_ADON | ADC_CR2_DMA | ADC_CR2_DDS);
+
+    // Start conversion on ADC1
+    ADC1->CR2 |= ADC_CR2_SWSTART;
 }
 
 

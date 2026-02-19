@@ -15,6 +15,9 @@
 #define LEDN_BLUE	1
 #define	LEDN_RED	2
 
+#define JOYSTICK1_X 	0
+#define JOYSTICK1_Y 	1
+
 void 	BSP_LED_Init			(void);
 void 	BSP_LED_On				(uint8_t n);
 void 	BSP_LED_Off				(uint8_t n);
