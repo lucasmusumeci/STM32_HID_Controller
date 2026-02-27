@@ -7,7 +7,7 @@
 
 #include "usb.h"
 
-
+#define SIZE_MSG 6
 
 #define USB_OTG_FS_INEP(i)    ((USB_OTG_INEndpointTypeDef *)((uint32_t)USB_OTG_FS_PERIPH_BASE + USB_OTG_IN_ENDPOINT_BASE + (i)*USB_OTG_EP_REG_SIZE))
 #define USB_OTG_FS_OUTEP(i)   ((USB_OTG_OUTEndpointTypeDef *)((uint32_t)USB_OTG_FS_PERIPH_BASE + USB_OTG_OUT_ENDPOINT_BASE + (i)*USB_OTG_EP_REG_SIZE))
@@ -39,15 +39,15 @@ usb_out_ctrl_t 		g_usb_out_ctrl;			// OUT control Endpoint (EP0 only for a HID/k
 
 usb_keyb_t 			g_usb;					// USB CDC data structure
 
-
+extern uint8_t 	g_controler_event_neutral[SIZE_MSG];
 
 /*
  * USB HID KEYBOARD DESCRIPTORS
  */
 
 #define BCD_DEVICE  					0x0200
-#define VENDOR_ID   					0x1209			// hobbyist VID
-#define PRODUCT_ID  					0x0001			// can change
+#define VENDOR_ID   					0x1209			// pid.code
+#define PRODUCT_ID  					0x0001
 
 #define EP0_MAX_PACKET_SIZE				0x40			// 64 bytes
 #define EP0_MAX_PACKET_SIZE_UNSIGNED    0x40U
@@ -179,7 +179,7 @@ uint8_t cfgDesc[] =
 		0x00,								/* 4  bCountryCode */
 		0x01,								/* 5  bNumDescriptors */
 		0x22,								/* 6  bDescriptorType = Report */
-		0x43, 0x00,							/* 7  wDescriptor Length = 67 bytes */
+		0x3F, 0x00,							/* 7  wDescriptor Length = 67 bytes */
 
 		/* Endpoint descriptor */
 		0x07,                     			/* 0    bLength */
@@ -191,7 +191,7 @@ uint8_t cfgDesc[] =
 };
 
 
-/*	USB HID KEYBOARD REPORT Descriptor - 67 bytes */
+/*	USB HID KEYBOARD REPORT Descriptor - 63 bytes */
 
 uint8_t	reportDesc[] =
 {
@@ -232,11 +232,6 @@ uint8_t	reportDesc[] =
 	    0x75, 0x01,        // Report Size = 1 bit
 	    0x95, 0x0C,        // Report Count = 12
 	    0x81, 0x02,        // Input (Data,Var,Abs)
-
-	    // --- Padding to next byte ---
-	    0x75, 0x04,        // 4 bits padding
-	    0x95, 0x01,
-	    0x81, 0x03,        // Input (Const)
 
 	    0xC0               // End Collection
 };
@@ -779,6 +774,9 @@ void OTG_FS_IRQHandler(void)
 		    	// Reset transfer completed interrupt mask
 				USB_OTG_FS_DEVICE->DIEPMSK &= ~USB_OTG_DIEPMSK_XFRCM;
 
+			    // Put EP1 back into NAK state until next BSP_USB_Send()
+			    USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_SNAK;
+
 				// Transmission is done
 				// The EP1 has been automatically disabled
 			}
@@ -1063,6 +1061,9 @@ static void USB_Setup_Packet_Handler(void)
 
 						USB_OTG_FS_INEP(0)->DIEPCTL |= USB_OTG_DIEPCTL_STALL;
 
+						USB_OTG_FS_OUTEP(0)->DOEPCTL |= USB_OTG_DIEPCTL_STALL;
+
+						//return; // Don't prepare EP0 for transmission
 						break;
 					}
 				}
@@ -1150,7 +1151,7 @@ static void USB_Setup_Packet_Handler(void)
 				USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_SD0PID_SEVNFRM;			// Set DATA0 PID
 				USB_OTG_FS_INEP(1)->DIEPCTL |= 1U  << USB_OTG_DIEPCTL_TXFNUM_Pos;		// FIFO Number
 				USB_OTG_FS_INEP(1)->DIEPCTL |= EP1_MAX_PACKET_SIZE_UNSIGNED << USB_OTG_DIEPCTL_MPSIZ_Pos;		// Max packet size = 64B
-				USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_CNAK;					// Clear NAK
+				//USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_CNAK;					// Clear NAK
 
 				/*
 				 *  Send a status IN packet on EP0
@@ -1176,6 +1177,7 @@ static void USB_Setup_Packet_Handler(void)
 				// Now the keyboard is ready
 				BSP_LED_On(LEDN_BLUE);
 				g_usb.keyb_ready = 1;
+				//BSP_USB_Send(g_controler_event_neutral, SIZE_MSG);
 
 			    break;
 			}

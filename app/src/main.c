@@ -89,7 +89,7 @@ int main(void)
 	BSP_USB_Core_Init();
 
 	// Give it some time to start
-	delay_ms(5000);
+	delay_ms(500);
 
 	// Send the message "as keyboard strokes" when the user button is depressed
 	while(1)
@@ -108,9 +108,14 @@ int main(void)
 			g_controler_event[4] = 0b00001000;
 		}
 
-		BSP_USB_Send(g_controler_event, SIZE_MSG);
 
-		delay_ms(100);
+		if (g_usb.keyb_ready)
+		{
+			BSP_USB_Send(g_controler_event, SIZE_MSG);
+			delay_ms(10);
+		}
+
+
 	}
 }
 
