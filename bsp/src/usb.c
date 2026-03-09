@@ -179,7 +179,7 @@ uint8_t cfgDesc[] =
 		0x00,								/* 4  bCountryCode */
 		0x01,								/* 5  bNumDescriptors */
 		0x22,								/* 6  bDescriptorType = Report */
-		0x3F, 0x00,							/* 7  wDescriptor Length = 67 bytes */
+		0x3D, 0x00,							/* 7  wDescriptor Length = 61 bytes */
 
 		/* Endpoint descriptor */
 		0x07,                     			/* 0    bLength */
@@ -261,8 +261,8 @@ void BSP_USB_Send(uint8_t *msg, uint8_t length)
     USB_OTG_FS_INEP(1)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// nbytes
     USB_OTG_FS_INEP(1)->DIEPTSIZ |= USB_OTG_DIEPTSIZ_XFRSIZ & g_usb.tx_nbytes;
 
-    // Enable device IN EP FIFO empty (TXFE) interrupt -> This is done to wait for available space in the TX FIFO
-    USB_OTG_FS_DEVICE->DIEPEMPMSK |= 1U <<1U;	// Enable IN EP1 TXFE interrupts
+    // Enable device IN EP1 FIFO empty (TXFE) interrupt -> This is done to wait for available space in the TX FIFO
+    USB_OTG_FS_DEVICE->DIEPEMPMSK |= 1U <<1U;
 
     // Enable IN EP1 (automatically disabled after previous transfer completed)
     USB_OTG_FS_INEP(1)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
