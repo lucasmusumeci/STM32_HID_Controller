@@ -245,6 +245,9 @@ void BSP_USB_Send(uint8_t *msg, uint8_t length)
 {
 	uint8_t i;
 
+    if (g_usb.tx_busy) return;   // previous transfer still in progress
+    g_usb.tx_busy = 1;
+
 	// Copy message into g_usb TX buffer
 	for (i=0; i<length; i++)
 	{
@@ -777,6 +780,9 @@ void OTG_FS_IRQHandler(void)
 			    // Put EP1 back into NAK state until next BSP_USB_Send()
 			    USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_SNAK;
 
+			    g_usb.tx_busy = 0;
+			    USB_OTG_FS_INEP(1)->DIEPINT = USB_OTG_DIEPINT_XFRC;  // clear XFRC only here
+
 				// Transmission is done
 				// The EP1 has been automatically disabled
 			}
@@ -812,37 +818,31 @@ void OTG_FS_IRQHandler(void)
 		    	USART3->TDR = 'E';
 
 		    	// Writing to the FIFO triggers the data transmission upon next IN token
-		    	if (g_usb.tx_nbytes > 0)
-		    	{
-		    		// Calculate number of packets needed (ceiling division)
-		    		uint16_t pcnt = (g_usb.tx_nbytes + EP1_MAX_PACKET_SIZE - 1) / EP1_MAX_PACKET_SIZE;
+		        if (g_usb.tx_nbytes > 0)
+		        {
+		            uint16_t pcnt = (g_usb.tx_nbytes + EP1_MAX_PACKET_SIZE - 1) / EP1_MAX_PACKET_SIZE;
 
-		    		// Set transfer size: packet count + byte count
-		    		USB_OTG_FS_INEP(1)->DIEPTSIZ  = 0;
-		    		USB_OTG_FS_INEP(1)->DIEPTSIZ |= (pcnt << 19U);         // packet count
-		    		USB_OTG_FS_INEP(1)->DIEPTSIZ |= g_usb.tx_nbytes;       // byte count
+		            // Set transfer size
+		            USB_OTG_FS_INEP(1)->DIEPTSIZ  = 0;
+		            USB_OTG_FS_INEP(1)->DIEPTSIZ |= (pcnt << 19U);
+		            USB_OTG_FS_INEP(1)->DIEPTSIZ |= g_usb.tx_nbytes;
 
-		    		// Re-arm EP1 (clear NAK, enable)
-		    		USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA;
+		            // Write data into FIFO FIRST
+		            p_fifo = (uint32_t*)0x50002000;
+		            USB_FIFO_Write(p_fifo, g_usb.tx_buffer, g_usb.tx_nbytes);
 
+		            g_usb.tx_nbytes = 0;
 
-		    		// Copy data to send into EP1 TX FIFO
-		    		p_fifo = (uint32_t*)0x50002000;
-		    		USB_FIFO_Write(p_fifo, g_usb.tx_buffer, g_usb.tx_nbytes);
+		            // Enable XFRC interrupt to catch transfer completion
+		            USB_OTG_FS_DEVICE->DIEPMSK |= USB_OTG_DIEPMSK_XFRCM;
+		        }
 
-		    		// No more data to send
-		    		g_usb.tx_nbytes = 0;
-
-		    		// Set Transfer completed interrupt mask
-		    		USB_OTG_FS_DEVICE->DIEPMSK |= USB_OTG_DIEPMSK_XFRCM;
-		    	}
-
-				// Disable IN EP1 FIFO empty (TXFE) interrupt
-				USB_OTG_FS_DEVICE->DIEPEMPMSK &= ~(1U <<1U);
+		        // Disable TXFE interrupt — job done
+		        USB_OTG_FS_DEVICE->DIEPEMPMSK &= ~(1U << 1U);
 			}
 
-			// Clear all EP1 IN interrupt flags
-			USB_OTG_FS_INEP(1)->DIEPINT |= 0x0000287B;
+			// With — clear everything EXCEPT bit 0 (XFRC):
+			USB_OTG_FS_INEP(1)->DIEPINT |= 0x0000287A;
 
 			my_printf("\r\n");
 		}

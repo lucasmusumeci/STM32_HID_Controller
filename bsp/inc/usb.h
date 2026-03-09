@@ -92,6 +92,7 @@ typedef struct
 	uint8_t tx_buffer[64];		// Buffer for outgoing (IN)  bytes
 	uint8_t	tx_nbytes;			// Number of bytes to send
 	uint8_t	keyb_ready;			// Flag for keyboard ready (set after SET CONFIGURATION is received)
+	uint8_t tx_busy;
 } usb_keyb_t;
 
 
