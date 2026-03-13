@@ -17,6 +17,8 @@
 
 #define JOYSTICK1_X 	0
 #define JOYSTICK1_Y 	1
+#define JOYSTICK2_X 	2
+#define JOYSTICK2_Y 	3
 
 void 	BSP_LED_Init			(void);
 void 	BSP_LED_On				(uint8_t n);
@@ -33,7 +35,7 @@ void 	BSP_PB_Init				(void);
 uint8_t	BSP_PB_GetState			(void);
 
 // ADC init
-void BSP_ADC_Init				(void);
+void BSP_Joysticks_ADC_Init		(void);
 
 
 

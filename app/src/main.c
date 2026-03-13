@@ -23,7 +23,7 @@
 // Local functions
 static uint8_t SystemClock_Config(void);
 
-uint8_t	adc_dma_buffer[2];
+uint8_t	joysticks_adc_dma_buffer[4];
 
 
 uint8_t		g_controler_event[SIZE_MSG] = { 		0x80,			// X axis (0x80 = 128 = default pos)
@@ -83,7 +83,7 @@ int main(void)
 	BSP_PB_Init();
 
 	// Initialize ADC
-	BSP_ADC_Init();
+	BSP_Joysticks_ADC_Init();
 
 	// Initialize and start USB Core
 	BSP_USB_Core_Init();
@@ -94,10 +94,13 @@ int main(void)
 	// Send the message "as keyboard strokes" when the user button is depressed
 	while(1)
 	{
-		//my_printf("Pos_X=%d, Pos_Y=%d\n\r", adc_dma_buffer[JOYSTICK1_X], adc_dma_buffer[JOYSTICK1_Y]);
+		my_printf("Joystick 1 : X=%d ; Y=%d\n\r", joysticks_adc_dma_buffer[JOYSTICK1_X], joysticks_adc_dma_buffer[JOYSTICK1_Y]);
+		my_printf("Joystick 2 : X=%d ; Y=%d\n\r", joysticks_adc_dma_buffer[JOYSTICK2_X], joysticks_adc_dma_buffer[JOYSTICK2_Y]);
 
-		g_controler_event[2] = adc_dma_buffer[JOYSTICK1_X];
-		g_controler_event[3] = 4095-adc_dma_buffer[JOYSTICK1_Y];
+		g_controler_event[0] = joysticks_adc_dma_buffer[JOYSTICK1_X];
+		g_controler_event[1] = 4095-joysticks_adc_dma_buffer[JOYSTICK1_Y];
+		g_controler_event[2] = joysticks_adc_dma_buffer[JOYSTICK2_X];
+		g_controler_event[3] = 4095-joysticks_adc_dma_buffer[JOYSTICK2_Y];
 
 		if (BSP_PB_GetState() == 1)
 		{

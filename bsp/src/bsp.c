@@ -216,26 +216,38 @@ void BSP_Console_Init()
 
 /*
  * ADC_Init()
- * Initialize ADC for a dual channel conversion
- * on channel 14 and 15 -> pin PC4 and PC5
+ * Initialize ADC for a 4 channel conversion
+ * Joystick 1 : on channel 10 and 13 -> pin PC0 and PC3
+ * Joystick 2 : on channel  5 and  6 -> pin PA5 and PA6
  */
 
-extern uint8_t	adc_dma_buffer[2];
+extern uint8_t	joysticks_adc_dma_buffer[4];
 
-void BSP_ADC_Init()
+void BSP_Joysticks_ADC_Init()
 {
 	// Enable GPIOC clock
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
 
-    // Configure pin PC0 as analog (ADC channel 10) (joystick_1_X)
+    // Configure pin PC0 as analog (ADC channel 10) (joystick1_X)
     GPIOC->MODER &= ~GPIO_MODER_MODER0_Msk;
     GPIOC->MODER |= (0x03 << GPIO_MODER_MODER0_Pos);
     GPIOC->PUPDR &= ~GPIO_PUPDR_PUPDR0_Msk;
 
-    // Configure pin PC3 as analog (ADC channel 13) (joystick_1_Y)
+    // Configure pin PC3 as analog (ADC channel 13) (joystick1_Y)
     GPIOC->MODER &= ~GPIO_MODER_MODER3_Msk;
     GPIOC->MODER |= (0x03 << GPIO_MODER_MODER3_Pos);
     GPIOC->PUPDR &= ~GPIO_PUPDR_PUPDR3_Msk;
+
+    // Configure pin PA5 as analog (ADC channel 5) (joystick2_X)
+    GPIOA->MODER &= ~GPIO_MODER_MODER5_Msk;
+    GPIOA->MODER |= (0x03 << GPIO_MODER_MODER5_Pos);
+    GPIOA->PUPDR &= ~GPIO_PUPDR_PUPDR5_Msk;
+
+    // Configure pin PA6 as analog (ADC channel 6) (joystick2_Y)
+    GPIOA->MODER &= ~GPIO_MODER_MODER6_Msk;
+    GPIOA->MODER |= (0x03 << GPIO_MODER_MODER6_Pos);
+    GPIOA->PUPDR &= ~GPIO_PUPDR_PUPDR6_Msk;
 
 	// Enable ADC clock
     RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
@@ -244,8 +256,8 @@ void BSP_ADC_Init()
     ADC ->CCR   = 0x00000000;
     ADC1->CR1 	= 0x00000000;
     ADC1->CR2 	= 0x00000000;
-    ADC1->SQR3  = 0x00000000;
-    ADC1->SQR3  = 0x00000000;
+    ADC1->SQR1  = 0x00000000;
+    ADC1->SQR2  = 0x00000000;
     ADC1->SQR3  = 0x00000000;
     ADC1->SMPR1 = 0x00000000;
     ADC1->SMPR2 = 0x00000000;
@@ -268,13 +280,17 @@ void BSP_ADC_Init()
     // Set sampling time to ADC clock cycles
     ADC1->SMPR1 |= (0x02 << ADC_SMPR1_SMP10_Pos);
     ADC1->SMPR1 |= (0x02 << ADC_SMPR1_SMP13_Pos);
+    ADC1->SMPR2 |= (0x02 << ADC_SMPR2_SMP5_Pos);
+    ADC1->SMPR2 |= (0x02 << ADC_SMPR2_SMP6_Pos);
 
-    // Sequence length = 2 conversions (L = 1 means 2 ranks)
-    ADC1->SQR1 = (0x01 << ADC_SQR1_L_Pos);
+    // Sequence length = 4 conversions (L = 3 means 4 ranks)
+    ADC1->SQR1 = (0x03 << ADC_SQR1_L_Pos);
 
     /* Rank 1 = channel 10
-	   Rank 2 = channel 13 */
-    ADC1->SQR3 = (10 << ADC_SQR3_SQ1_Pos) | (13 << ADC_SQR3_SQ2_Pos);
+	   Rank 2 = channel 13
+	   Rank 3 = channel 5
+       Rank 4 = channel 6 */
+    ADC1->SQR3 = (10 << ADC_SQR3_SQ1_Pos) | (13 << ADC_SQR3_SQ2_Pos) | (5 << ADC_SQR3_SQ3_Pos) | (6 << ADC_SQR3_SQ4_Pos);
 
     // Start DMA clock
     RCC->AHB1ENR |= RCC_AHB1ENR_DMA2EN;
@@ -301,10 +317,10 @@ void BSP_ADC_Init()
     DMA2_Stream0->PAR = (uint32_t)&ADC1->DR;
 
     // Memory is adc_dma_buffer
-    DMA2_Stream0->M0AR = (uint32_t)adc_dma_buffer;
+    DMA2_Stream0->M0AR = (uint32_t)joysticks_adc_dma_buffer;
 
     // Set Memory Buffer size
-    DMA2_Stream0->NDTR = 2;
+    DMA2_Stream0->NDTR = 4;
 
     // Set data transfer direction
     DMA2_Stream0->CR |= (0x00 << DMA_SxCR_DIR_Pos);

@@ -675,6 +675,7 @@ void OTG_FS_IRQHandler(void)
 		// If this is for EP0
 		if ( (USB_OTG_FS_DEVICE->DAINT & 0x00000001) == 0x00000001)
 		{
+
 			my_printf("[IEP0]");
 
 			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_NAK_Msk)   		 == USB_OTG_DIEPINT_NAK)   		  my_printf("[NAK]");   	  // NAK transmitted or received
@@ -761,18 +762,18 @@ void OTG_FS_IRQHandler(void)
 		// If this is for EP1
 		if ( (USB_OTG_FS_DEVICE->DAINT & 0x00000002) == 0x00000002)
 		{
-			my_printf("[IEP1]");
-			my_printf("[%08x]", USB_OTG_FS->GINTSTS);
+			//my_printf("[IEP1]");
+			//my_printf("[%08x]", USB_OTG_FS->GINTSTS);
 
-	    	while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
-	    	USART3->TDR = '1';
+	    	//while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
+	    	//USART3->TDR = '1';
 
 
 	    	// Transfer completed interrupt
 			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_XFRC_Msk) == USB_OTG_DIEPINT_XFRC)
 			{
-				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
-		    	USART3->TDR = 'X';
+				//while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
+		    	//USART3->TDR = 'X';
 
 		    	// Reset transfer completed interrupt mask
 				USB_OTG_FS_DEVICE->DIEPMSK &= ~USB_OTG_DIEPMSK_XFRCM;
@@ -789,33 +790,33 @@ void OTG_FS_IRQHandler(void)
 
 			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_EPDISD_Msk) == USB_OTG_DIEPINT_EPDISD )
 			{
-				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
-		    	USART3->TDR = 'D';
+				//while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
+		    	//USART3->TDR = 'D';
 			}
 
 			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_TOC_Msk) == USB_OTG_DIEPINT_TOC)
 			{
-				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
-		    	USART3->TDR = 'T';
+				//while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
+		    	//USART3->TDR = 'T';
 			}
 
 			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_INEPNE_Msk) == USB_OTG_DIEPINT_INEPNE)
 			{
-				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
-		    	USART3->TDR = 'N';
+				//while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
+		    	//USART3->TDR = 'N';
 			}
 
 			// IN token received when Tx FIFO is empty
 			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_ITTXFE_Msk) == USB_OTG_DIEPINT_ITTXFE)
 			{
 				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
-		    	USART3->TDR = 'I';
+		    	//USART3->TDR = 'I';
 			}
 
 			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_TXFE_Msk) == USB_OTG_DIEPINT_TXFE)
 			{
 				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
-		    	USART3->TDR = 'E';
+		    	//USART3->TDR = 'E';
 
 		    	// Writing to the FIFO triggers the data transmission upon next IN token
 		        if (g_usb.tx_nbytes > 0)
@@ -844,7 +845,7 @@ void OTG_FS_IRQHandler(void)
 			// With — clear everything EXCEPT bit 0 (XFRC):
 			USB_OTG_FS_INEP(1)->DIEPINT |= 0x0000287A;
 
-			my_printf("\r\n");
+			//my_printf("\r\n");
 		}
 	}
 }
