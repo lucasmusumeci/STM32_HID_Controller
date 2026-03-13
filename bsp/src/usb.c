@@ -9,8 +9,8 @@
 
 #define SIZE_MSG 6
 
-#define USB_OTG_FS_INEP(i)    ((USB_OTG_INEndpointTypeDef *)((uint32_t)USB_OTG_FS_PERIPH_BASE + USB_OTG_IN_ENDPOINT_BASE + (i)*USB_OTG_EP_REG_SIZE))
-#define USB_OTG_FS_OUTEP(i)   ((USB_OTG_OUTEndpointTypeDef *)((uint32_t)USB_OTG_FS_PERIPH_BASE + USB_OTG_OUT_ENDPOINT_BASE + (i)*USB_OTG_EP_REG_SIZE))
+#define USB_OTG_HS_INEP(i)    ((USB_OTG_INEndpointTypeDef *)((uint32_t)USB_OTG_HS_PERIPH_BASE + USB_OTG_IN_ENDPOINT_BASE + (i)*USB_OTG_EP_REG_SIZE))
+#define USB_OTG_HS_OUTEP(i)   ((USB_OTG_OUTEndpointTypeDef *)((uint32_t)USB_OTG_HS_PERIPH_BASE + USB_OTG_OUT_ENDPOINT_BASE + (i)*USB_OTG_EP_REG_SIZE))
 
 /*
  * Local static functions
@@ -28,8 +28,8 @@ static void 	USB_FIFO_Write				(uint32_t* fifo, uint8_t* buffer, uint16_t bcnt);
  * Global variables
  */
 
-USB_OTG_GlobalTypeDef * const USB_OTG_FS_GLOBAL  = (void*)(USB_OTG_FS_PERIPH_BASE + USB_OTG_GLOBAL_BASE);
-USB_OTG_DeviceTypeDef * const USB_OTG_FS_DEVICE  = (void*)(USB_OTG_FS_PERIPH_BASE + USB_OTG_DEVICE_BASE);
+USB_OTG_GlobalTypeDef * const USB_OTG_HS_GLOBAL  = (void*)(USB_OTG_HS_PERIPH_BASE + USB_OTG_GLOBAL_BASE);
+USB_OTG_DeviceTypeDef * const USB_OTG_HS_DEVICE  = (void*)(USB_OTG_HS_PERIPH_BASE + USB_OTG_DEVICE_BASE);
 
 usb_packet_t		g_usb_packet;			// Incoming packet info
 usb_setup_packet_t 	g_usb_setup_packet;		// Setup packet info
@@ -258,17 +258,17 @@ void BSP_USB_Send(uint8_t *msg, uint8_t length)
 	g_usb.tx_nbytes = length;
 
 	// Setup IN EP1 for transmission
-    USB_OTG_FS_INEP(1)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// 1 packet
-    USB_OTG_FS_INEP(1)->DIEPTSIZ |= 1U <<19U;
+    USB_OTG_HS_INEP(1)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// 1 packet
+    USB_OTG_HS_INEP(1)->DIEPTSIZ |= 1U <<19U;
 
-    USB_OTG_FS_INEP(1)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// nbytes
-    USB_OTG_FS_INEP(1)->DIEPTSIZ |= USB_OTG_DIEPTSIZ_XFRSIZ & g_usb.tx_nbytes;
+    USB_OTG_HS_INEP(1)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// nbytes
+    USB_OTG_HS_INEP(1)->DIEPTSIZ |= USB_OTG_DIEPTSIZ_XFRSIZ & g_usb.tx_nbytes;
 
     // Enable device IN EP1 FIFO empty (TXFE) interrupt -> This is done to wait for available space in the TX FIFO
-    USB_OTG_FS_DEVICE->DIEPEMPMSK |= 1U <<1U;
+    USB_OTG_HS_DEVICE->DIEPEMPMSK |= 1U <<1U;
 
     // Enable IN EP1 (automatically disabled after previous transfer completed)
-    USB_OTG_FS_INEP(1)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
+    USB_OTG_HS_INEP(1)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
 }
 
 
@@ -278,194 +278,207 @@ void BSP_USB_Send(uint8_t *msg, uint8_t length)
  */
 void BSP_USB_Core_Init()
 {
-	// USB_OTG_FS GPIO Configuration
-	// PA8		-> USB_OTG_FS_SOF	(AF10)
-	// PA10     -> USB_OTG_FS_ID	(AF10)
-	// PA11     -> USB_OTG_FS_DM	(AF10)
-	// PA12     -> USB_OTG_FS_DP 	(AF10)
-	// PA9		-> USB_OTG_FS_VBUS
+	// USB_OTG_HS GPIO Configuration
+	// PA4		-> USB_OTG_HS_SOF	(AF12)
+	// PB12     -> USB_OTG_HS_ID	(AF12)
+	// PB14     -> USB_OTG_HS_DM	(AF12)
+	// PB15     -> USB_OTG_HS_DP 	(AF12)
+	// PB13		-> USB_OTG_HS_VBUS
 
 	uint32_t	i;
 
 	// Enable GPIOA clock
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
 
-	// Configure PA8, PA10, PA11, PA12 as AF mode
-	GPIOA->MODER &= ~(GPIO_MODER_MODER8 | GPIO_MODER_MODER10 | GPIO_MODER_MODER11 | GPIO_MODER_MODER12);
-	GPIOA->MODER |=  (0x02 <<16U) | (0x02 <<20U) | (0x02 <<22U) | (0x02 <<24U);
+	// Configure PA4, PB12, PB14, PB15 as AF mode
+	GPIOA->MODER &= ~ GPIO_MODER_MODER4;
+	GPIOB->MODER &= ~(GPIO_MODER_MODER12 | GPIO_MODER_MODER14 | GPIO_MODER_MODER15);
+	GPIOA->MODER |=   0x02 <<GPIO_MODER_MODER4_Pos;
+	GPIOB->MODER |=  (0x02 <<GPIO_MODER_MODER12_Pos | 0x02 <<GPIO_MODER_MODER14_Pos | 0x02 <<GPIO_MODER_MODER15_Pos);
 
 	// Set to push-pull outputs
-	GPIOA->OTYPER &= ~(GPIO_OTYPER_OT8_Msk | GPIO_OTYPER_OT10_Msk | GPIO_OTYPER_OT11_Msk | GPIO_OTYPER_OT12_Msk);
+	GPIOA->OTYPER &= ~ GPIO_OTYPER_OT4_Msk;
+	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT12_Msk | GPIO_OTYPER_OT14_Msk | GPIO_OTYPER_OT15_Msk);
 
 	// Set to very high speed
-	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDER_OSPEEDR8 | GPIO_OSPEEDER_OSPEEDR10 | GPIO_OSPEEDER_OSPEEDR11 | GPIO_OSPEEDER_OSPEEDR12);
-	GPIOA->OSPEEDR |=  (0x03 <<16U) | (0x03 <<20U) | (0x03 <<22U) | (0x03 <<24U);
+	GPIOA->OSPEEDR &= ~ GPIO_OSPEEDER_OSPEEDR4;
+	GPIOB->OSPEEDR &= ~(GPIO_OSPEEDER_OSPEEDR12 | GPIO_OSPEEDER_OSPEEDR14 | GPIO_OSPEEDER_OSPEEDR15);
+	GPIOA->OSPEEDR |=   0x03 <<GPIO_OSPEEDER_OSPEEDR4_Pos;
+	GPIOB->OSPEEDR |=  (0x03 <<GPIO_OSPEEDER_OSPEEDR12_Pos) | (0x03 <<GPIO_OSPEEDER_OSPEEDR14_Pos) | (0x03 <<GPIO_OSPEEDER_OSPEEDR15_Pos);
 
 	// No pull resistors
-	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR8_Msk | GPIO_PUPDR_PUPDR10_Msk | GPIO_PUPDR_PUPDR11_Msk | GPIO_PUPDR_PUPDR12_Msk);
+	GPIOA->PUPDR &= ~ GPIO_PUPDR_PUPDR4_Msk;
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR12_Msk | GPIO_PUPDR_PUPDR14_Msk | GPIO_PUPDR_PUPDR15_Msk);
 
-	// Connect to USB_OTG_FS (AF10)
-	GPIOA->AFR[1] &= ~(0x000FFF0F);
-	GPIOA->AFR[1] |=   0x000AAA0A;
+	// Connect to USB_OTG_HS (AF12)
+	GPIOA->AFR[0] &= ~(0x000F0000);
+	GPIOA->AFR[0] |=   0x000C0000;
+	GPIOB->AFR[1] &= ~(0xFF0F0000);
+	GPIOB->AFR[1] |=   0xCC0C0000;
 
-	// Configure PA9 as input
-	GPIOA->MODER &= ~(GPIO_MODER_MODER9);
-	GPIOA->MODER |=  (0x00 <<18U);
+	// Configure PB13 as input
+	GPIOB->MODER &= ~(GPIO_MODER_MODER13);
+	GPIOB->MODER |=  (0x00 <<GPIO_MODER_MODER13_Pos);
 
 
 	// USB Global Core Configuration
 
-	// Start USB_OTG_FS clock
-	RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;
+	// Start USB_OTG_HS clock
+	RCC->AHB1ENR |= RCC_AHB1ENR_OTGHSEN;
 
 	// Global AHB USB Configuration
 	// - Global USB interrupts are disabled
 	// - TXFE signals that TX FIFO is completely empty
-	USB_OTG_FS->GAHBCFG &= ~USB_OTG_GAHBCFG_GINT;
-	USB_OTG_FS->GAHBCFG |=  USB_OTG_GAHBCFG_TXFELVL;
+	USB_OTG_HS->GAHBCFG &= ~USB_OTG_GAHBCFG_GINT;
+	USB_OTG_HS->GAHBCFG |=  USB_OTG_GAHBCFG_TXFELVL;
 
-	// NVIC enable USB_OTG_FS interrupts
-	NVIC_SetPriority(OTG_FS_IRQn, 1);
-	NVIC_EnableIRQ(OTG_FS_IRQn);
+	// NVIC enable USB_OTG_HS interrupts
+	NVIC_SetPriority(OTG_HS_IRQn, 1);
+	NVIC_EnableIRQ(OTG_HS_IRQn);
 
-	// Select internal PHY interface layer (actually always set)
-	USB_OTG_FS->GUSBCFG |= USB_OTG_GUSBCFG_PHYSEL;
+	// Select internal PHY interface layer (0: USB 2.0 external ULPI high-speed PHY ; 1: USB 1.1 full-speed serial mode)
+	USB_OTG_HS->GUSBCFG |= USB_OTG_GUSBCFG_PHYSEL;
 
 	// Wait for AHB master state machine to be in IDLE state
-	while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_AHBIDL) == 0U);
+	while ((USB_OTG_HS->GRSTCTL & USB_OTG_GRSTCTL_AHBIDL) == 0U);
 
 	// Core soft reset
-	USB_OTG_FS->GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
-	while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_CSRST) == USB_OTG_GRSTCTL_CSRST);
+	USB_OTG_HS->GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
+	while ((USB_OTG_HS->GRSTCTL & USB_OTG_GRSTCTL_CSRST) == USB_OTG_GRSTCTL_CSRST);
 
 	// Wait (again) for AHB master state machine to be in IDLE state
-	while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_AHBIDL) == 0U);
+	while ((USB_OTG_HS->GRSTCTL & USB_OTG_GRSTCTL_AHBIDL) == 0U);
 
 	// Deactivate power down (i.e. transceiver becomes active)
-	USB_OTG_FS->GCCFG = USB_OTG_GCCFG_PWRDWN;
+	USB_OTG_HS->GCCFG = USB_OTG_GCCFG_PWRDWN;
 
 	// Force DEVICE mode (no matter what the ID input pin is)
-	USB_OTG_FS->GUSBCFG &= ~(USB_OTG_GUSBCFG_FHMOD | USB_OTG_GUSBCFG_FDMOD);
-	USB_OTG_FS->GUSBCFG |= USB_OTG_GUSBCFG_FDMOD;
+	USB_OTG_HS->GUSBCFG &= ~(USB_OTG_GUSBCFG_FHMOD | USB_OTG_GUSBCFG_FDMOD);
+	USB_OTG_HS->GUSBCFG |= USB_OTG_GUSBCFG_FDMOD;
+
+	// Set the turnaround time
+	USB_OTG_HS->GUSBCFG &= ~USB_OTG_GUSBCFG_TRDT_Msk;
+	USB_OTG_HS->GUSBCFG |= (9U << USB_OTG_GUSBCFG_TRDT_Pos);
 
 	delay_ms(50);
 
 	// Deactivate VBUS Sensing B
-    // USB_OTG_FS->GCCFG &= ~ USB_OTG_GCCFG_VBUSBSEN;
+    // USB_OTG_HS->GCCFG &= ~ USB_OTG_GCCFG_VBUSBSEN;
 
     // Activate VBUS Sensing B
-    USB_OTG_FS->GCCFG |= USB_OTG_GCCFG_VBDEN;
+    USB_OTG_HS->GCCFG |= USB_OTG_GCCFG_VBDEN;
 
     // Restart the Phy Clock
-    *(__IO uint32_t *)((uint32_t)USB_OTG_FS + USB_OTG_PCGCCTL_BASE) = 0U;
+    *(__IO uint32_t *)((uint32_t)USB_OTG_HS + USB_OTG_PCGCCTL_BASE) = 0U;
 
 
 
 	// USB DEVICE mode configuration
 
 	// Set periodic frame interval to 80%
-	USB_OTG_FS_DEVICE->DCFG &= ~(USB_OTG_DCFG_PFIVL_Msk);
-	USB_OTG_FS_DEVICE->DCFG |= 0x00 <<USB_OTG_DCFG_PFIVL_Pos;
+	USB_OTG_HS_DEVICE->DCFG &= ~(USB_OTG_DCFG_PFIVL_Msk);
+	USB_OTG_HS_DEVICE->DCFG |= 0x00 <<USB_OTG_DCFG_PFIVL_Pos;
 
 	// Set to full speed
-	USB_OTG_FS_DEVICE->DCFG |= 0x03 <<USB_OTG_DCFG_DSPD_Pos;
+	USB_OTG_HS_DEVICE->DCFG |= 0x03 <<USB_OTG_DCFG_DSPD_Pos;
 
 	// Flush all TX FIFOs
-	USB_OTG_FS->GRSTCTL = USB_OTG_GRSTCTL_TXFFLSH | (0x10 <<USB_OTG_GRSTCTL_TXFNUM_Pos);
-	while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_TXFFLSH) == USB_OTG_GRSTCTL_TXFFLSH);
+	USB_OTG_HS->GRSTCTL = USB_OTG_GRSTCTL_TXFFLSH | (0x10 <<USB_OTG_GRSTCTL_TXFNUM_Pos);
+	while ((USB_OTG_HS->GRSTCTL & USB_OTG_GRSTCTL_TXFFLSH) == USB_OTG_GRSTCTL_TXFFLSH);
 
 	// Flush RX FIFO
-	USB_OTG_FS->GRSTCTL = USB_OTG_GRSTCTL_RXFFLSH;
-	while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_RXFFLSH) == USB_OTG_GRSTCTL_RXFFLSH);
+	USB_OTG_HS->GRSTCTL = USB_OTG_GRSTCTL_RXFFLSH;
+	while ((USB_OTG_HS->GRSTCTL & USB_OTG_GRSTCTL_RXFFLSH) == USB_OTG_GRSTCTL_RXFFLSH);
 
 	// Mask all IN EP interrupts
-	USB_OTG_FS_DEVICE->DIEPMSK 	= 0x00000000U;
+	USB_OTG_HS_DEVICE->DIEPMSK 	= 0x00000000U;
 
 	// Mask all OUT EP interrupts
-	USB_OTG_FS_DEVICE->DOEPMSK 	= 0x00000000U;
+	USB_OTG_HS_DEVICE->DOEPMSK 	= 0x00000000U;
 
 	// Mask all EP interrupts
-	USB_OTG_FS_DEVICE->DAINTMSK = 0x00000000U;
+	USB_OTG_HS_DEVICE->DAINTMSK = 0x00000000U;
 
 
 	// For all IN EP (0, 1..5)
 	for (i=0; i<6; i++)
 	{
 		// If the EP is currently enabled
-	    if ((USB_OTG_FS_INEP(i)->DIEPCTL & USB_OTG_DIEPCTL_EPENA) == USB_OTG_DIEPCTL_EPENA)
+	    if ((USB_OTG_HS_INEP(i)->DIEPCTL & USB_OTG_DIEPCTL_EPENA) == USB_OTG_DIEPCTL_EPENA)
 	    {
 	    	// Disable the EP and set NAK
-	    	USB_OTG_FS_INEP(i)->DIEPCTL = (USB_OTG_DIEPCTL_EPDIS | USB_OTG_DIEPCTL_SNAK);
+	    	USB_OTG_HS_INEP(i)->DIEPCTL = (USB_OTG_DIEPCTL_EPDIS | USB_OTG_DIEPCTL_SNAK);
 	    }
 	    else
 	    {
 	    	// Reset EP control register
-	    	USB_OTG_FS_INEP(i)->DIEPCTL = 0x00000000U;
+	    	USB_OTG_HS_INEP(i)->DIEPCTL = 0x00000000U;
 	    }
 
 	    // Set IN EP size to zero
-	    USB_OTG_FS_INEP(i)->DIEPTSIZ = 0x00000000U;
+	    USB_OTG_HS_INEP(i)->DIEPTSIZ = 0x00000000U;
 
 	    // Clear ALL IN EP interrupts flags
-	    USB_OTG_FS_INEP(i)->DIEPINT |=  0x0000287BU;
+	    USB_OTG_HS_INEP(i)->DIEPINT |=  0x0000287BU;
 	}
 
 	// For all OUT EP (0, 1..5)
 	for (i=0; i<6; i++)
 	{
 		// If the EP is currently enabled
-		if ((USB_OTG_FS_OUTEP(i)->DOEPCTL & USB_OTG_DOEPCTL_EPENA) == USB_OTG_DOEPCTL_EPENA)	// Passe dans le else 4 fois
+		if ((USB_OTG_HS_OUTEP(i)->DOEPCTL & USB_OTG_DOEPCTL_EPENA) == USB_OTG_DOEPCTL_EPENA)	// Passe dans le else 4 fois
 		{
 			// Disable the EP and set NAK
-			USB_OTG_FS_OUTEP(i)->DOEPCTL = (USB_OTG_DOEPCTL_EPDIS | USB_OTG_DOEPCTL_SNAK);
+			USB_OTG_HS_OUTEP(i)->DOEPCTL = (USB_OTG_DOEPCTL_EPDIS | USB_OTG_DOEPCTL_SNAK);
 	    }
 	    else
 	    {
 	    	// Reset EP control register
-	    	USB_OTG_FS_OUTEP(i)->DOEPCTL = 0x00000000U;
+	    	USB_OTG_HS_OUTEP(i)->DOEPCTL = 0x00000000U;
 	    }
 
 		// Set OUT EP size to zero
-		USB_OTG_FS_OUTEP(i)->DOEPTSIZ = 0x00000000U;
+		USB_OTG_HS_OUTEP(i)->DOEPTSIZ = 0x00000000U;
 
 		 // Clear ALL OUT EP interrupt flags
-		USB_OTG_FS_OUTEP(i)->DOEPINT  |= 0x0000313BU;
+		USB_OTG_HS_OUTEP(i)->DOEPINT  |= 0x0000313BU;
 	}
 
 	// Disable all interrupts
-	USB_OTG_FS->GINTMSK = 0x00000000U;
+	USB_OTG_HS->GINTMSK = 0x00000000U;
 
 	// Clear ALL pending interrupts
-	USB_OTG_FS->GINTSTS |= 0xF030FC0AU;
+	USB_OTG_HS->GINTSTS |= 0xF030FC0AU;
 
 	// Enable the common interrupts
-	USB_OTG_FS->GINTMSK |= USB_OTG_GINTMSK_RXFLVLM;
+	USB_OTG_HS->GINTMSK |= USB_OTG_GINTMSK_RXFLVLM;
 
 	// Enable interrupts matching to the Device mode ONLY
-	USB_OTG_FS->GINTMSK |= USB_OTG_GINTMSK_USBSUSPM;				// USB SUSPEND event
-	USB_OTG_FS->GINTMSK |= USB_OTG_GINTMSK_USBRST;					// USB RESET event
-	USB_OTG_FS->GINTMSK |= USB_OTG_GINTMSK_ENUMDNEM;				// USB ENUMERATION done event
-	USB_OTG_FS->GINTMSK |= USB_OTG_GINTMSK_IEPINT;					// IN EP event
+	USB_OTG_HS->GINTMSK |= USB_OTG_GINTMSK_USBSUSPM;				// USB SUSPEND event
+	USB_OTG_HS->GINTMSK |= USB_OTG_GINTMSK_USBRST;					// USB RESET event
+	USB_OTG_HS->GINTMSK |= USB_OTG_GINTMSK_ENUMDNEM;				// USB ENUMERATION done event
+	USB_OTG_HS->GINTMSK |= USB_OTG_GINTMSK_IEPINT;					// IN EP event
 
 	// Soft-Disconnect USB device by disabling pull-up/pull-down
-	USB_OTG_FS_DEVICE->DCTL |= USB_OTG_DCTL_SDIS;
+	USB_OTG_HS_DEVICE->DCTL |= USB_OTG_DCTL_SDIS;
 	delay_ms(10);
 
 	// Set RX FIFO size to 0x80 = 128 words = 512 bytes
-	USB_OTG_FS->GRXFSIZ = (uint32_t)0x80;
+	USB_OTG_HS->GRXFSIZ = (uint32_t)0x80;
 
 	// Set TX FIFO for IN EP0 to 0x40 = 64 words = 256 bytes
-	USB_OTG_FS->DIEPTXF0_HNPTXFSIZ = ( (uint32_t)0x40 <<16U | 0x80);
+	USB_OTG_HS->DIEPTXF0_HNPTXFSIZ = ( (uint32_t)0x40 <<16U | 0x80);
 
 	// Set TX FIFO for IN EP1 to 0x80 = 128 words = 512 bytes				--> Total = 512 + 256 + 512 = 1280 bytes = 1,25kB
-	USB_OTG_FS->DIEPTXF[0] = ((uint32_t)0x80 <<16U | (0x80 + 0x40) );
+	USB_OTG_HS->DIEPTXF[0] = ((uint32_t)0x80 <<16U | (0x80 + 0x40) );
 
 	// Soft-Connect USB device by enabling pull-up/pull-down
-	USB_OTG_FS_DEVICE->DCTL &= ~USB_OTG_DCTL_SDIS ;
+	USB_OTG_HS_DEVICE->DCTL &= ~USB_OTG_DCTL_SDIS ;
 	delay_ms(10);
 
 	// Enable global interrupts
-	USB_OTG_FS->GAHBCFG |= USB_OTG_GAHBCFG_GINT;
+	USB_OTG_HS->GAHBCFG |= USB_OTG_GAHBCFG_GINT;
 
 	// Perform Reset initializations
 	USB_Reset_Event_Handler();
@@ -476,12 +489,12 @@ void BSP_USB_Core_Init()
 
 /**********************************************************************
  *                                                                    *
- * USB_OTG_FS Interrupt Handler (this is where everything is done !)  *
+ * USB_OTG_HS Interrupt Handler (this is where everything is done !)  *
  *                                                                    *
  **********************************************************************
  */
 
-void OTG_FS_IRQHandler(void)
+void OTG_HS_IRQHandler(void)
 {
 	uint32_t		temp;				// Temporary register
 	uint32_t 		*p_fifo;
@@ -489,13 +502,13 @@ void OTG_FS_IRQHandler(void)
 
 
 	// Deal with USB RESET event
-	if ((USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_USBRST) == USB_OTG_GINTSTS_USBRST)
+	if ((USB_OTG_HS->GINTSTS & USB_OTG_GINTSTS_USBRST) == USB_OTG_GINTSTS_USBRST)
 	{
 		// Reset USB core
 		USB_Reset_Event_Handler();
 
 	    // Clear USBRST interrupt flag
-	    USB_OTG_FS->GINTSTS |= USB_OTG_GINTSTS_USBRST;
+	    USB_OTG_HS->GINTSTS |= USB_OTG_GINTSTS_USBRST;
 
 	    my_printf("RESET\r\n");
 
@@ -505,13 +518,13 @@ void OTG_FS_IRQHandler(void)
 
 
 	// Deal with USB SUSPEND event
-	if ((USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_USBSUSP) == USB_OTG_GINTSTS_USBSUSP)
+	if ((USB_OTG_HS->GINTSTS & USB_OTG_GINTSTS_USBSUSP) == USB_OTG_GINTSTS_USBSUSP)
 	{
 		// Clear USBSUSP flag
-		USB_OTG_FS->GINTSTS |= USB_OTG_GINTSTS_USBSUSP;
+		USB_OTG_HS->GINTSTS |= USB_OTG_GINTSTS_USBSUSP;
 
 		// Disable the USB SUSPEND event interrupt (to avoid multiple SUSPEND interrupts)
-		USB_OTG_FS->GINTMSK &= ~USB_OTG_GINTMSK_USBSUSPM;
+		USB_OTG_HS->GINTMSK &= ~USB_OTG_GINTMSK_USBSUSPM;
 
 		my_printf("SUSPEND\r\n");
 
@@ -521,23 +534,23 @@ void OTG_FS_IRQHandler(void)
 
 
 	// Deal with USB ENUMERATION DONE event
-    if (USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_ENUMDNE)
+    if (USB_OTG_HS->GINTSTS & USB_OTG_GINTSTS_ENUMDNE)
     {
        	// Clear ENUMDNE flag
-    	USB_OTG_FS->GINTSTS = USB_OTG_GINTSTS_ENUMDNE;
+    	USB_OTG_HS->GINTSTS = USB_OTG_GINTSTS_ENUMDNE;
 
     	// Re-enable the USB SUSPEND event interrupt
-    	USB_OTG_FS->GINTMSK |= USB_OTG_GINTMSK_USBSUSPM;
+    	USB_OTG_HS->GINTMSK |= USB_OTG_GINTMSK_USBSUSPM;
 
     	my_printf("ENUM DONE\r\n");
     }
 
 
 	// Deal with data RX event
-    if ((USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_RXFLVL) == USB_OTG_GINTSTS_RXFLVL) // Rx non-empty
+    if ((USB_OTG_HS->GINTSTS & USB_OTG_GINTSTS_RXFLVL) == USB_OTG_GINTSTS_RXFLVL) // Rx non-empty
 	{
 		// Read RX status
-		temp = USB_OTG_FS->GRXSTSR;
+		temp = USB_OTG_HS->GRXSTSR;
 
 		// Retrieve the number of received bytes
 		g_usb_packet.bcnt 	= (uint16_t)( (temp & USB_OTG_GRXSTSP_BCNT_Msk) >>USB_OTG_GRXSTSP_BCNT_Pos);
@@ -545,7 +558,7 @@ void OTG_FS_IRQHandler(void)
 		g_usb_packet.epnum	= (int8_t)  ( (temp & USB_OTG_GRXSTSP_EPNUM_Msk) >>USB_OTG_GRXSTSP_EPNUM_Pos);
 
 		// pop FIFO
-		USB_OTG_FS->GRXSTSP;
+		USB_OTG_HS->GRXSTSP;
 
 		my_printf("PK %d on EP%d of %d bytes : ", g_usb_packet.status, g_usb_packet.epnum, g_usb_packet.bcnt);
 
@@ -558,7 +571,7 @@ void OTG_FS_IRQHandler(void)
 			USB_Setup_Packet_Handler();
 
 			// Clear NAK bit and set EPENA to start transmission on EP0 (this terminates the SETUP transaction)
-			USB_OTG_FS_OUTEP(0)->DOEPCTL |= USB_OTG_DOEPCTL_CNAK | USB_OTG_DOEPCTL_EPENA;
+			USB_OTG_HS_OUTEP(0)->DOEPCTL |= USB_OTG_DOEPCTL_CNAK | USB_OTG_DOEPCTL_EPENA;
 		}
 
 
@@ -568,7 +581,7 @@ void OTG_FS_IRQHandler(void)
 			my_printf("[SETUP_COMPLETE]");
 
 			// Clear NAK bit and set EPENA to start transmission on EP0
-			USB_OTG_FS_OUTEP(0)->DOEPCTL |= USB_OTG_DOEPCTL_CNAK | USB_OTG_DOEPCTL_EPENA;
+			USB_OTG_HS_OUTEP(0)->DOEPCTL |= USB_OTG_DOEPCTL_CNAK | USB_OTG_DOEPCTL_EPENA;
 		}
 
 
@@ -623,7 +636,7 @@ void OTG_FS_IRQHandler(void)
 						g_usb_out_ctrl.process = 0;
 
 						// Disable device IN EP FIFO empty interrupt
-						USB_OTG_FS_DEVICE->DIEPEMPMSK &= ~(1U <<0U);
+						USB_OTG_HS_DEVICE->DIEPEMPMSK &= ~(1U <<0U);
 					}
 					else
 					{
@@ -641,13 +654,13 @@ void OTG_FS_IRQHandler(void)
 
 
 					// Re-enable OUT EP1
-					USB_OTG_FS_OUTEP(1)->DOEPCTL |= USB_OTG_DOEPCTL_EPENA;
+					USB_OTG_HS_OUTEP(1)->DOEPCTL |= USB_OTG_DOEPCTL_EPENA;
 
 					// Clear OUT EP1 interrupt flags
-					USB_OTG_FS_OUTEP(1)->DOEPINT |= 0xFF;
+					USB_OTG_HS_OUTEP(1)->DOEPINT |= 0xFF;
 
 					// Clear NACK bit so that ACK is ready for next reception
-					USB_OTG_FS_OUTEP(1)->DOEPCTL |= USB_OTG_DOEPCTL_CNAK;
+					USB_OTG_HS_OUTEP(1)->DOEPCTL |= USB_OTG_DOEPCTL_CNAK;
 
 					break;
 				}
@@ -661,8 +674,8 @@ void OTG_FS_IRQHandler(void)
 			my_printf(" Weird...");
 
 			// Flush RX FIFO
-			USB_OTG_FS->GRSTCTL = USB_OTG_GRSTCTL_RXFFLSH;
-			while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_RXFFLSH) == USB_OTG_GRSTCTL_RXFFLSH);
+			USB_OTG_HS->GRSTCTL = USB_OTG_GRSTCTL_RXFFLSH;
+			while ((USB_OTG_HS->GRSTCTL & USB_OTG_GRSTCTL_RXFFLSH) == USB_OTG_GRSTCTL_RXFFLSH);
 		}
 
 		my_printf("\r\n");
@@ -670,24 +683,24 @@ void OTG_FS_IRQHandler(void)
 
 
 	// Deal with IN EP event
-    if ( (USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_IEPINT) == USB_OTG_GINTSTS_IEPINT )
+    if ( (USB_OTG_HS->GINTSTS & USB_OTG_GINTSTS_IEPINT) == USB_OTG_GINTSTS_IEPINT )
 	{
 		// If this is for EP0
-		if ( (USB_OTG_FS_DEVICE->DAINT & 0x00000001) == 0x00000001)
+		if ( (USB_OTG_HS_DEVICE->DAINT & 0x00000001) == 0x00000001)
 		{
 			my_printf("[IEP0]");
 
-			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_NAK_Msk)   		 == USB_OTG_DIEPINT_NAK)   		  my_printf("[NAK]");   	  // NAK transmitted or received
-			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_PKTDRPSTS_Msk)   == USB_OTG_DIEPINT_PKTDRPSTS)    my_printf("[PKTRDPSTS]");   // Packet dropped status
-			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_TXFIFOUDRN_Msk)  == USB_OTG_DIEPINT_TXFIFOUDRN)   my_printf("[TXFIFOUDRN]");  // Transmit FIFO underrun
-			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_INEPNM_Msk) 	 == USB_OTG_DIEPINT_INEPNM) 	  my_printf("[INEPNM]"); // IN received with EP mismatch
+			if ( (USB_OTG_HS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_NAK_Msk)   		 == USB_OTG_DIEPINT_NAK)   		  my_printf("[NAK]");   	  // NAK transmitted or received
+			if ( (USB_OTG_HS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_PKTDRPSTS_Msk)   == USB_OTG_DIEPINT_PKTDRPSTS)    my_printf("[PKTRDPSTS]");   // Packet dropped status
+			if ( (USB_OTG_HS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_TXFIFOUDRN_Msk)  == USB_OTG_DIEPINT_TXFIFOUDRN)   my_printf("[TXFIFOUDRN]");  // Transmit FIFO underrun
+			if ( (USB_OTG_HS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_INEPNM_Msk) 	 == USB_OTG_DIEPINT_INEPNM) 	  my_printf("[INEPNM]"); // IN received with EP mismatch
 
-			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_XFRC_Msk)   == USB_OTG_DIEPINT_XFRC)   my_printf("[XFRC]");   // Transfer completed interrupt
-			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_EPDISD_Msk) == USB_OTG_DIEPINT_EPDISD) my_printf("[EPDISD]"); // Endpoint disbaled interrupt
-			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_TOC_Msk)    == USB_OTG_DIEPINT_TOC)    my_printf("[TOC]");	  // Timeout condition
-			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_INEPNE_Msk) == USB_OTG_DIEPINT_INEPNE) my_printf("[INEPNE]"); // IN endpoint NAK effective
+			if ( (USB_OTG_HS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_XFRC_Msk)   == USB_OTG_DIEPINT_XFRC)   my_printf("[XFRC]");   // Transfer completed interrupt
+			if ( (USB_OTG_HS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_EPDISD_Msk) == USB_OTG_DIEPINT_EPDISD) my_printf("[EPDISD]"); // Endpoint disbaled interrupt
+			if ( (USB_OTG_HS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_TOC_Msk)    == USB_OTG_DIEPINT_TOC)    my_printf("[TOC]");	  // Timeout condition
+			if ( (USB_OTG_HS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_INEPNE_Msk) == USB_OTG_DIEPINT_INEPNE) my_printf("[INEPNE]"); // IN endpoint NAK effective
 
-			if ( (USB_OTG_FS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_ITTXFE_Msk) == USB_OTG_DIEPINT_ITTXFE ) // IN token received when Tx FIFO empty
+			if ( (USB_OTG_HS_INEP(0)->DIEPINT & USB_OTG_DIEPINT_ITTXFE_Msk) == USB_OTG_DIEPINT_ITTXFE ) // IN token received when Tx FIFO empty
 			{
 				my_printf("[ITTXFE]");
 
@@ -721,23 +734,23 @@ void OTG_FS_IRQHandler(void)
 						// If there is only one packet, set number of bytes to transmit
 						if (g_usb_in_ctrl.pcnt == 1)
 						{
-							USB_OTG_FS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.bcnt;
+							USB_OTG_HS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.bcnt;
 						}
 
 						// Otherwise, set byte count to maximum for first packet
 						else
 						{
-							USB_OTG_FS_INEP(0)->DIEPTSIZ |= EP0_MAX_PACKET_SIZE;
+							USB_OTG_HS_INEP(0)->DIEPTSIZ |= EP0_MAX_PACKET_SIZE;
 						}
 
 						// Enable all IN EP interrupts
-						USB_OTG_FS->GINTMSK |= USB_OTG_GINTMSK_IEPINT;
+						USB_OTG_HS->GINTMSK |= USB_OTG_GINTMSK_IEPINT;
 
 						// Enable device IN EP FIFO empty interrupt
-						USB_OTG_FS_DEVICE->DIEPEMPMSK |= 1U <<0U;
+						USB_OTG_HS_DEVICE->DIEPEMPMSK |= 1U <<0U;
 
 						// Enable IN EP0
-						USB_OTG_FS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
+						USB_OTG_HS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
 					}
 				}
 
@@ -752,67 +765,67 @@ void OTG_FS_IRQHandler(void)
 
 			// Clear all EP0 IN interrupt flags
 			//
-			USB_OTG_FS_INEP(0)->DIEPINT |= 0x0000287B;
+			USB_OTG_HS_INEP(0)->DIEPINT |= 0x0000287B;
 
 			my_printf("\r\n");
 		}
 
 
 		// If this is for EP1
-		if ( (USB_OTG_FS_DEVICE->DAINT & 0x00000002) == 0x00000002)
+		if ( (USB_OTG_HS_DEVICE->DAINT & 0x00000002) == 0x00000002)
 		{
 			my_printf("[IEP1]");
-			my_printf("[%08x]", USB_OTG_FS->GINTSTS);
+			my_printf("[%08x]", USB_OTG_HS->GINTSTS);
 
 	    	while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
 	    	USART3->TDR = '1';
 
 
 	    	// Transfer completed interrupt
-			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_XFRC_Msk) == USB_OTG_DIEPINT_XFRC)
+			if ( (USB_OTG_HS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_XFRC_Msk) == USB_OTG_DIEPINT_XFRC)
 			{
 				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
 		    	USART3->TDR = 'X';
 
 		    	// Reset transfer completed interrupt mask
-				USB_OTG_FS_DEVICE->DIEPMSK &= ~USB_OTG_DIEPMSK_XFRCM;
+				USB_OTG_HS_DEVICE->DIEPMSK &= ~USB_OTG_DIEPMSK_XFRCM;
 
 			    // Put EP1 back into NAK state until next BSP_USB_Send()
-			    USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_SNAK;
+			    USB_OTG_HS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_SNAK;
 
 			    g_usb.tx_busy = 0;
-			    USB_OTG_FS_INEP(1)->DIEPINT = USB_OTG_DIEPINT_XFRC;  // clear XFRC only here
+			    USB_OTG_HS_INEP(1)->DIEPINT = USB_OTG_DIEPINT_XFRC;  // clear XFRC only here
 
 				// Transmission is done
 				// The EP1 has been automatically disabled
 			}
 
-			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_EPDISD_Msk) == USB_OTG_DIEPINT_EPDISD )
+			if ( (USB_OTG_HS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_EPDISD_Msk) == USB_OTG_DIEPINT_EPDISD )
 			{
 				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
 		    	USART3->TDR = 'D';
 			}
 
-			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_TOC_Msk) == USB_OTG_DIEPINT_TOC)
+			if ( (USB_OTG_HS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_TOC_Msk) == USB_OTG_DIEPINT_TOC)
 			{
 				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
 		    	USART3->TDR = 'T';
 			}
 
-			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_INEPNE_Msk) == USB_OTG_DIEPINT_INEPNE)
+			if ( (USB_OTG_HS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_INEPNE_Msk) == USB_OTG_DIEPINT_INEPNE)
 			{
 				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
 		    	USART3->TDR = 'N';
 			}
 
 			// IN token received when Tx FIFO is empty
-			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_ITTXFE_Msk) == USB_OTG_DIEPINT_ITTXFE)
+			if ( (USB_OTG_HS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_ITTXFE_Msk) == USB_OTG_DIEPINT_ITTXFE)
 			{
 				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
 		    	USART3->TDR = 'I';
 			}
 
-			if ( (USB_OTG_FS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_TXFE_Msk) == USB_OTG_DIEPINT_TXFE)
+			if ( (USB_OTG_HS_INEP(1)->DIEPINT & USB_OTG_DIEPINT_TXFE_Msk) == USB_OTG_DIEPINT_TXFE)
 			{
 				while ( (USART3->ISR & USART_ISR_TC) != USART_ISR_TC);
 		    	USART3->TDR = 'E';
@@ -823,9 +836,9 @@ void OTG_FS_IRQHandler(void)
 		            uint16_t pcnt = (g_usb.tx_nbytes + EP1_MAX_PACKET_SIZE - 1) / EP1_MAX_PACKET_SIZE;
 
 		            // Set transfer size
-		            USB_OTG_FS_INEP(1)->DIEPTSIZ  = 0;
-		            USB_OTG_FS_INEP(1)->DIEPTSIZ |= (pcnt << 19U);
-		            USB_OTG_FS_INEP(1)->DIEPTSIZ |= g_usb.tx_nbytes;
+		            USB_OTG_HS_INEP(1)->DIEPTSIZ  = 0;
+		            USB_OTG_HS_INEP(1)->DIEPTSIZ |= (pcnt << 19U);
+		            USB_OTG_HS_INEP(1)->DIEPTSIZ |= g_usb.tx_nbytes;
 
 		            // Write data into FIFO FIRST
 		            p_fifo = (uint32_t*)0x50002000;
@@ -834,15 +847,15 @@ void OTG_FS_IRQHandler(void)
 		            g_usb.tx_nbytes = 0;
 
 		            // Enable XFRC interrupt to catch transfer completion
-		            USB_OTG_FS_DEVICE->DIEPMSK |= USB_OTG_DIEPMSK_XFRCM;
+		            USB_OTG_HS_DEVICE->DIEPMSK |= USB_OTG_DIEPMSK_XFRCM;
 		        }
 
 		        // Disable TXFE interrupt — job done
-		        USB_OTG_FS_DEVICE->DIEPEMPMSK &= ~(1U << 1U);
+		        USB_OTG_HS_DEVICE->DIEPEMPMSK &= ~(1U << 1U);
 			}
 
 			// With — clear everything EXCEPT bit 0 (XFRC):
-			USB_OTG_FS_INEP(1)->DIEPINT |= 0x0000287A;
+			USB_OTG_HS_INEP(1)->DIEPINT |= 0x0000287A;
 
 			my_printf("\r\n");
 		}
@@ -858,33 +871,33 @@ static void USB_Reset_Event_Handler(void)
 	uint8_t		i;
 
 	// Reset Remote Wake-up Signaling flag (don't know why...)
-	USB_OTG_FS_DEVICE->DCTL &= ~USB_OTG_DCTL_RWUSIG;
+	USB_OTG_HS_DEVICE->DCTL &= ~USB_OTG_DCTL_RWUSIG;
 
 	// Flush EP0 TX FIFO
-	USB_OTG_FS->GRSTCTL = USB_OTG_GRSTCTL_TXFFLSH | (0x00 <<USB_OTG_GRSTCTL_TXFNUM_Pos);
-	while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_TXFFLSH) == USB_OTG_GRSTCTL_TXFFLSH);
+	USB_OTG_HS->GRSTCTL = USB_OTG_GRSTCTL_TXFFLSH | (0x00 <<USB_OTG_GRSTCTL_TXFNUM_Pos);
+	while ((USB_OTG_HS->GRSTCTL & USB_OTG_GRSTCTL_TXFFLSH) == USB_OTG_GRSTCTL_TXFFLSH);
 
 	// Clear all EP Interrupt flags
     for (i=0; i<6; i++)
     {
-    	USB_OTG_FS_INEP(i)->DIEPINT  |= 0x0000287BU;
-    	USB_OTG_FS_OUTEP(i)->DOEPINT |= 0x0000313BU;
+    	USB_OTG_HS_INEP(i)->DIEPINT  |= 0x0000287BU;
+    	USB_OTG_HS_OUTEP(i)->DOEPINT |= 0x0000313BU;
     }
 
     // Un-mask Interrupt for EP0 (IN/OUT)
-    USB_OTG_FS_DEVICE->DAINTMSK |= 0x00010001U;
+    USB_OTG_HS_DEVICE->DAINTMSK |= 0x00010001U;
 
 	// Un-mask Interrupt for OUT EP : SETUP | Transfet Compete | EP disable
-    USB_OTG_FS_DEVICE->DOEPMSK |= (USB_OTG_DOEPMSK_STUPM | USB_OTG_DOEPMSK_XFRCM | USB_OTG_DOEPMSK_EPDM);
+    USB_OTG_HS_DEVICE->DOEPMSK |= (USB_OTG_DOEPMSK_STUPM | USB_OTG_DOEPMSK_XFRCM | USB_OTG_DOEPMSK_EPDM);
 
 	// Set Default Address to 0
-    USB_OTG_FS_DEVICE->DCFG &= ~USB_OTG_DCFG_DAD;
+    USB_OTG_HS_DEVICE->DCFG &= ~USB_OTG_DCFG_DAD;
 
 	// Setup EP0 to receive SETUP messages
-    USB_OTG_FS_OUTEP(0)->DOEPTSIZ = 0U;
-    USB_OTG_FS_OUTEP(0)->DOEPTSIZ |= (USB_OTG_DOEPTSIZ_PKTCNT & (1U << 19U)) ;
-    USB_OTG_FS_OUTEP(0)->DOEPTSIZ |= (3U * 8U);										// 3 packets of 8 bytes
-    USB_OTG_FS_OUTEP(0)->DOEPTSIZ |=  USB_OTG_DOEPTSIZ_STUPCNT;  					// 3 packets
+    USB_OTG_HS_OUTEP(0)->DOEPTSIZ = 0U;
+    USB_OTG_HS_OUTEP(0)->DOEPTSIZ |= (USB_OTG_DOEPTSIZ_PKTCNT & (1U << 19U)) ;
+    USB_OTG_HS_OUTEP(0)->DOEPTSIZ |= (3U * 8U);										// 3 packets of 8 bytes
+    USB_OTG_HS_OUTEP(0)->DOEPTSIZ |=  USB_OTG_DOEPTSIZ_STUPCNT;  					// 3 packets
 }
 
 
@@ -1059,9 +1072,9 @@ static void USB_Setup_Packet_Handler(void)
 						g_usb_in_ctrl.pindex = 0;
 						g_usb_in_ctrl.buffer = 0x00000000;
 
-						USB_OTG_FS_INEP(0)->DIEPCTL |= USB_OTG_DIEPCTL_STALL;
+						USB_OTG_HS_INEP(0)->DIEPCTL |= USB_OTG_DIEPCTL_STALL;
 
-						USB_OTG_FS_OUTEP(0)->DOEPCTL |= USB_OTG_DIEPCTL_STALL;
+						USB_OTG_HS_OUTEP(0)->DOEPCTL |= USB_OTG_DIEPCTL_STALL;
 
 						//return; // Don't prepare EP0 for transmission
 						break;
@@ -1069,28 +1082,28 @@ static void USB_Setup_Packet_Handler(void)
 				}
 
 				// Prepare IN EP0 for transmission
-				USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// packets number
-				USB_OTG_FS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.pcnt <<19U;
+				USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// packets number
+				USB_OTG_HS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.pcnt <<19U;
 
-				USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// bytes number
+				USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// bytes number
 
 				// If there is only one packet, set number of bytes to transmit
 				if (g_usb_in_ctrl.pcnt == 1)
 				{
-					USB_OTG_FS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.bcnt;
+					USB_OTG_HS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.bcnt;
 				}
 
 				// Otherwise, set byte count to maximum for first packet
 				else
 				{
-					USB_OTG_FS_INEP(0)->DIEPTSIZ |= EP0_MAX_PACKET_SIZE;
+					USB_OTG_HS_INEP(0)->DIEPTSIZ |= EP0_MAX_PACKET_SIZE;
 				}
 
 				// Enable device IN EP FIFO empty interrupt
-				USB_OTG_FS_DEVICE->DIEPEMPMSK |= 1U <<0U;
+				USB_OTG_HS_DEVICE->DIEPEMPMSK |= 1U <<0U;
 
 				// Enable IN EP0
-				USB_OTG_FS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
+				USB_OTG_HS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
 
 				break;
 			}
@@ -1102,24 +1115,24 @@ static void USB_Setup_Packet_Handler(void)
 				my_printf("[SET ADRESS %d]", (uint8_t)(g_usb_setup_packet.wValue & 0x00FF));
 
 				// Set Device address
-				USB_OTG_FS_DEVICE->DCFG &= ~USB_OTG_DCFG_DAD_Msk;
-				USB_OTG_FS_DEVICE->DCFG |= (uint8_t)(g_usb_setup_packet.wValue & 0x00FF) <<USB_OTG_DCFG_DAD_Pos;
+				USB_OTG_HS_DEVICE->DCFG &= ~USB_OTG_DCFG_DAD_Msk;
+				USB_OTG_HS_DEVICE->DCFG |= (uint8_t)(g_usb_setup_packet.wValue & 0x00FF) <<USB_OTG_DCFG_DAD_Pos;
 
 				g_usb_in_ctrl.pcnt   = 1;
 				g_usb_in_ctrl.bcnt   = 0;
 
 				// Setup IN EP0 for transmission
-				USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// 1 packet
-				USB_OTG_FS_INEP(0)->DIEPTSIZ |= 1U <<19U;
+				USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// 1 packet
+				USB_OTG_HS_INEP(0)->DIEPTSIZ |= 1U <<19U;
 
-				USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// 0 bytes
-				USB_OTG_FS_INEP(0)->DIEPTSIZ |= 0;
+				USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// 0 bytes
+				USB_OTG_HS_INEP(0)->DIEPTSIZ |= 0;
 
 				// Disable device IN EP FIFO empty interrupt
-				USB_OTG_FS_DEVICE->DIEPEMPMSK &= ~(1U <<0U);
+				USB_OTG_HS_DEVICE->DIEPEMPMSK &= ~(1U <<0U);
 
 				// Enable IN EP0
-				USB_OTG_FS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
+				USB_OTG_HS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
 
 				break;
 			}
@@ -1135,23 +1148,23 @@ static void USB_Setup_Packet_Handler(void)
 				 */
 
 				// Clear all IN EP(1) interrupts flags
-				USB_OTG_FS_INEP(1)->DIEPINT |=  0x0000287BU;
+				USB_OTG_HS_INEP(1)->DIEPINT |=  0x0000287BU;
 
 				// Enable all IN EP Transfer Complete (XFRC) interrupt (this one only)
-				USB_OTG_FS_DEVICE->DIEPMSK  &= ~0x0000207BU;
-				// USB_OTG_FS_DEVICE->DIEPMSK |= USB_OTG_DIEPMSK_XFRCM;
+				USB_OTG_HS_DEVICE->DIEPMSK  &= ~0x0000207BU;
+				// USB_OTG_HS_DEVICE->DIEPMSK |= USB_OTG_DIEPMSK_XFRCM;
 
 			    // Un-mask general interrupts from IN EP1
-			    USB_OTG_FS_DEVICE->DAINTMSK |= 0x00000002U;
+			    USB_OTG_HS_DEVICE->DAINTMSK |= 0x00000002U;
 
 			    // Setup IN EP1 in INTERRUPT mode (without enabling it at that time)
-				USB_OTG_FS_INEP(1)->DIEPCTL = 0x00000000U;
-				USB_OTG_FS_INEP(1)->DIEPCTL |= 3 <<USB_OTG_DIEPCTL_EPTYP_Pos;			// Interrupt
-				USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_USBAEP;					// USB Active
-				USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_SD0PID_SEVNFRM;			// Set DATA0 PID
-				USB_OTG_FS_INEP(1)->DIEPCTL |= 1U  << USB_OTG_DIEPCTL_TXFNUM_Pos;		// FIFO Number
-				USB_OTG_FS_INEP(1)->DIEPCTL |= EP1_MAX_PACKET_SIZE_UNSIGNED << USB_OTG_DIEPCTL_MPSIZ_Pos;		// Max packet size = 64B
-				//USB_OTG_FS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_CNAK;					// Clear NAK
+				USB_OTG_HS_INEP(1)->DIEPCTL = 0x00000000U;
+				USB_OTG_HS_INEP(1)->DIEPCTL |= 3 <<USB_OTG_DIEPCTL_EPTYP_Pos;			// Interrupt
+				USB_OTG_HS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_USBAEP;					// USB Active
+				USB_OTG_HS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_SD0PID_SEVNFRM;			// Set DATA0 PID
+				USB_OTG_HS_INEP(1)->DIEPCTL |= 1U  << USB_OTG_DIEPCTL_TXFNUM_Pos;		// FIFO Number
+				USB_OTG_HS_INEP(1)->DIEPCTL |= EP1_MAX_PACKET_SIZE_UNSIGNED << USB_OTG_DIEPCTL_MPSIZ_Pos;		// Max packet size = 64B
+				//USB_OTG_HS_INEP(1)->DIEPCTL |= USB_OTG_DIEPCTL_CNAK;					// Clear NAK
 
 				/*
 				 *  Send a status IN packet on EP0
@@ -1161,17 +1174,17 @@ static void USB_Setup_Packet_Handler(void)
 				g_usb_in_ctrl.bcnt   = 0;
 
 				// Setup IN EP0 for transmission
-				USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// 1 packet
-				USB_OTG_FS_INEP(0)->DIEPTSIZ |= 1U <<19U;
+				USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// 1 packet
+				USB_OTG_HS_INEP(0)->DIEPTSIZ |= 1U <<19U;
 
-				USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// 0 bytes
-				USB_OTG_FS_INEP(0)->DIEPTSIZ |= 0;
+				USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// 0 bytes
+				USB_OTG_HS_INEP(0)->DIEPTSIZ |= 0;
 
 				// Disable device IN EP FIFO empty interrupt
-				USB_OTG_FS_DEVICE->DIEPEMPMSK &= ~(1U <<0U);
+				USB_OTG_HS_DEVICE->DIEPEMPMSK &= ~(1U <<0U);
 
 				// Enable IN EP0
-				USB_OTG_FS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
+				USB_OTG_HS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
 
 
 				// Now the keyboard is ready
@@ -1215,17 +1228,17 @@ static void USB_Setup_Packet_Handler(void)
 			 g_usb_in_ctrl.buffer = (uint8_t*)reportDesc;
 
 			 // Prepare IN EP0 for transmission
-			 USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// packets number
-			 USB_OTG_FS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.pcnt <<19U;
+			 USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// packets number
+			 USB_OTG_HS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.pcnt <<19U;
 
-			 USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// bytes number
-			 USB_OTG_FS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.bcnt;
+			 USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// bytes number
+			 USB_OTG_HS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.bcnt;
 
 			 // Enable device IN EP FIFO empty interrupt
-			 USB_OTG_FS_DEVICE->DIEPEMPMSK |= 1U <<0U;
+			 USB_OTG_HS_DEVICE->DIEPEMPMSK |= 1U <<0U;
 
 			 // Enable IN EP0
-			 USB_OTG_FS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
+			 USB_OTG_HS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
 		 }
 	 }
 
@@ -1244,17 +1257,17 @@ static void USB_Setup_Packet_Handler(void)
 		g_usb_in_ctrl.pindex = 0;
 
 		// Prepare IN EP0 for transmission
-		USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// packets number
-		USB_OTG_FS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.pcnt <<19U;
+		USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// packets number
+		USB_OTG_HS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.pcnt <<19U;
 
-		USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// bytes number
-		USB_OTG_FS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.bcnt;
+		USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// bytes number
+		USB_OTG_HS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.bcnt;
 
 		// Disable device IN EP FIFO empty interrupt
-		USB_OTG_FS_DEVICE->DIEPEMPMSK &= ~(1U <<0U);
+		USB_OTG_HS_DEVICE->DIEPEMPMSK &= ~(1U <<0U);
 
 		// Enable IN EP0
-		USB_OTG_FS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
+		USB_OTG_HS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
 	}
 
 	if ((g_usb_setup_packet.bmRequestType == 0x21) && (g_usb_setup_packet.bRequest == 0x09))
@@ -1271,17 +1284,17 @@ static void USB_Setup_Packet_Handler(void)
 		g_usb_in_ctrl.pindex = 0;
 
 		// Prepare IN EP0 for transmission
-		USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// packets number
-		USB_OTG_FS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.pcnt <<19U;
+		USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);		// packets number
+		USB_OTG_HS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.pcnt <<19U;
 
-		USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// bytes number
-		USB_OTG_FS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.bcnt;
+		USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);		// bytes number
+		USB_OTG_HS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.bcnt;
 
 		// Disable device IN EP FIFO empty interrupt
-		USB_OTG_FS_DEVICE->DIEPEMPMSK &= ~(1U <<0U);
+		USB_OTG_HS_DEVICE->DIEPEMPMSK &= ~(1U <<0U);
 
 		// Enable IN EP0
-		USB_OTG_FS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
+		USB_OTG_HS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
 	}
 
 	// SET_PROTOCOL (bmRequestType=0x21, bRequest=0x0B)
@@ -1297,16 +1310,16 @@ static void USB_Setup_Packet_Handler(void)
 	    g_usb_in_ctrl.pindex = 0;
 
 	    // Prepare IN EP0 for zero-length status
-	    USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);
-	    USB_OTG_FS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.pcnt << 19U;
-	    USB_OTG_FS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);
-	    USB_OTG_FS_INEP(0)->DIEPTSIZ |= 0;
+	    USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_PKTCNT);
+	    USB_OTG_HS_INEP(0)->DIEPTSIZ |= g_usb_in_ctrl.pcnt << 19U;
+	    USB_OTG_HS_INEP(0)->DIEPTSIZ &= ~(USB_OTG_DIEPTSIZ_XFRSIZ);
+	    USB_OTG_HS_INEP(0)->DIEPTSIZ |= 0;
 
 	    // Disable FIFO empty interrupt (no data to send)
-	    USB_OTG_FS_DEVICE->DIEPEMPMSK &= ~(1U << 0U);
+	    USB_OTG_HS_DEVICE->DIEPEMPMSK &= ~(1U << 0U);
 
 	    // ACK with zero-length IN packet
-	    USB_OTG_FS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
+	    USB_OTG_HS_INEP(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
 	}
 
 }

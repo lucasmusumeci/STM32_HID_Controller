@@ -75,8 +75,6 @@ int main(void)
 		delay_ms(100);
 		BSP_LED_Toggle(LEDN_BLUE);
 		delay_ms(100);
-		BSP_LED_Toggle(LEDN_RED);
-		delay_ms(100);
 	}
 
 	// Initialize User Push-Button

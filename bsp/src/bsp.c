@@ -17,7 +17,6 @@
  * Nucleo LEDS
  * GREEN 	-> PB0
  * BLUE		-> PB7
- * RED		-> PB14
  *
  * Set LED initial state to OFF
  */
@@ -27,16 +26,15 @@ void BSP_LED_Init()
 	// Start GPIOs Clocks
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
 
-	// Configure PB0, PB7, PB14 as high-speed PP outputs with no pull resistors
-	GPIOB->MODER &= ~(GPIO_MODER_MODER0_Msk | GPIO_MODER_MODER7_Msk | GPIO_MODER_MODER14_Msk);
-	GPIOB->MODER   |= (1U <<GPIO_MODER_MODER0_Pos) | (1U <<GPIO_MODER_MODER7_Pos) | (1U <<GPIO_MODER_MODER14_Pos);
-	GPIOB->OSPEEDR |= (3U <<GPIO_OSPEEDR_OSPEEDR0_Pos) | (3U <<GPIO_OSPEEDR_OSPEEDR7_Pos) | (3U <<GPIO_OSPEEDR_OSPEEDR14_Pos);
-	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR0_Msk | GPIO_PUPDR_PUPDR7_Msk | GPIO_PUPDR_PUPDR14_Msk);
+	// Configure PB0 and PB7 as high-speed PP outputs with no pull resistors
+	GPIOB->MODER &= ~(GPIO_MODER_MODER0_Msk | GPIO_MODER_MODER7_Msk);
+	GPIOB->MODER   |= (1U <<GPIO_MODER_MODER0_Pos) | (1U <<GPIO_MODER_MODER7_Pos);
+	GPIOB->OSPEEDR |= (3U <<GPIO_OSPEEDR_OSPEEDR0_Pos) | (3U <<GPIO_OSPEEDR_OSPEEDR7_Pos);
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR0_Msk | GPIO_PUPDR_PUPDR7_Msk);
 
 	// Initial  state if off
 	GPIOB->BSRR = GPIO_BSRR_BR0;
 	GPIOB->BSRR = GPIO_BSRR_BR7;
-	GPIOB->BSRR = GPIO_BSRR_BR14;
 }
 
 
@@ -60,12 +58,6 @@ void BSP_LED_On(uint8_t n)
 		case 1:
 		{
 			GPIOB->BSRR = GPIO_BSRR_BS7;
-			break;
-		}
-
-		case 2:
-		{
-			GPIOB->BSRR = GPIO_BSRR_BS14;
 			break;
 		}
 	}
@@ -92,12 +84,6 @@ void BSP_LED_Off(uint8_t n)
 			GPIOB->BSRR = GPIO_BSRR_BR7;
 			break;
 		}
-
-		case 2:
-		{
-			GPIOB->BSRR = GPIO_BSRR_BR14;
-			break;
-		}
 	}
 }
 
@@ -120,12 +106,6 @@ void BSP_LED_Toggle(uint8_t n)
 		case 1:
 		{
 			GPIOB->ODR ^= GPIO_ODR_ODR_7;
-			break;
-		}
-
-		case 2:
-		{
-			GPIOB->ODR ^= GPIO_ODR_ODR_14;
 			break;
 		}
 	}
